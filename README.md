@@ -100,6 +100,24 @@ which runs against a bundled local page so you can try it without any real site.
 
 ---
 
+## Use from Claude Code
+
+handoff ships a [Claude Code](https://docs.claude.com/claude-code) skill in
+[`skills/handoff/`](skills/handoff/SKILL.md). Install it and Claude Code learns
+when and how to drive handoff for you:
+
+```bash
+cp -r skills/handoff ~/.claude/skills/handoff      # user-level, or
+cp -r skills/handoff .claude/skills/handoff        # project-level
+```
+
+Then just ask Claude Code to automate a task on a site you're logged into. It
+runs `--dry-run` to preview the plan, keeps the human brake intact, and hands you
+the exact command to run yourself when an action needs your approval — it will
+never answer an approval prompt or use `--yolo` on your behalf.
+
+---
+
 ## Approval modes
 
 | Mode | Flag | Behaviour |
