@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>handoff demo page</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; }
+    label { display:block; margin: 12px 0 4px; }
+    input, textarea { width: 100%; padding: 8px; }
+    .danger { background:#c0392b; color:#fff; border:0; padding:10px 16px; margin-top:16px; }
+    .safe { background:#eee; border:0; padding:8px 14px; }
+  </style>
+</head>
+<body>
+  <h1>handoff demo page</h1>
+  <p>A self-contained page to try handoff without touching any real site.</p>
+
+  <!-- A non-mutating search: handoff should type + read WITHOUT asking. -->
+  <label for="q">Search the docs (safe)</label>
+  <input id="q" name="q" type="search" placeholder="type a query…">
+  <button class="safe" type="button" onclick="document.getElementById('out').innerText='searched: '+document.getElementById('q').value">Search</button>
+  <p id="out"></p>
+
+  <!-- A real form with a destructive submit: handoff MUST ask before clicking. -->
+  <form onsubmit="event.preventDefault(); document.getElementById('sent').innerText='(submitted)';">
+    <label for="msg">Message</label>
+    <textarea id="msg" name="message" rows="3" placeholder="write a message…"></textarea>
+    <button class="danger" type="submit">Send message</button>
+  </form>
+  <p id="sent"></p>
+</body>
+</html>

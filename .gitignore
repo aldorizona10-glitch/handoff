@@ -1,0 +1,38 @@
+# --- NEVER COMMIT: secrets & authenticated sessions ---------------------
+.env
+.env.*
+!.env.example
+*.env
+secrets*
+# The persistent browser profile holds the cookies for sites YOU logged into.
+.handoff-profile/
+**/handoff-profile/
+*.cookies
+cookies.json
+auth*.json
+storage_state*.json
+# Screenshots / traces / logs can leak private page contents.
+screenshots/
+traces/
+*.trace
+*.log
+.playwright-mcp/
+
+# --- Python ------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- OS / editor -------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
