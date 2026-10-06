@@ -65,7 +65,40 @@ Each step the agent sees the current URL, the visible text, a screenshot, and an
 **indexed list of the interactive elements** on screen. It refers to elements by
 index (`click 12`), so there are no brittle hand-written selectors.
 
+From there it has the usual browser-agent toolkit — `click`, `type`, `scroll`,
+`select_option`, `extract_content`, tabs (`open_tab` / `switch_tab`) — and it may
+request several actions in one step. The moment one of them changes the page, the
+rest are skipped and the agent re-observes, so it never acts on a stale index.
+
 ---
+
+## Architecture — the same family as browser-use
+
+handoff is built on the same core design as [browser-use](https://github.com/browser-use/browser-use)
+and other modern browser agents, and adds one thing they leave out — a human brake:
+
+- **Observe → think → act loop.** Each step the page is reduced to a screenshot
+  plus an *indexed list of interactive elements*; the model picks the next action
+  by index; the action runs; repeat. ([`handoff/agent.py`](handoff/agent.py))
+- **An extensible action registry.** Capabilities aren't an `if/elif` ladder —
+  they're functions registered with a decorator, each self-describing. The
+  registry generates the Anthropic tool schemas and dispatches by name, so adding
+  a capability is one function. ([`handoff/registry.py`](handoff/registry.py),
+  [`handoff/actions.py`](handoff/actions.py))
+- **A standard `ActionResult`.** Every action returns the same shape
+  (`extracted_content` / `error` / `is_done` / `success`), so errors are fed back
+  to the model to adapt from instead of crashing the run.
+- **Multi-action steps with re-observation.** The model may queue several actions;
+  the loop stops at the first one that changes the page and re-reads the DOM.
+- **Read-only `extract_content`.** Pulls just the information you ask for out of
+  the current page, without changing it.
+
+The difference is point-blank: **a default-on approval gate sits between "think"
+and "act."** An action the classifier judges sensitive (submit, send, pay,
+delete, cross-site) stops for a human `y/N` before it runs — and you log in by
+hand, so handoff never receives a credential. browser-use optimises for autonomy;
+handoff optimises for trust. (browser-use is MIT-licensed; handoff is an
+independent project, not affiliated with it.)
 
 ## Install
 
@@ -127,13 +160,39 @@ never answer an approval prompt or use `--yolo` on your behalf.
 | **Dry run** | `--dry-run` | Never mutate; sensitive actions are auto-denied and reported. No API key needed to preview. |
 | **Yolo** | `--yolo` | Never prompt. Opt-in only; prints a warning. |
 
-What counts as **sensitive** (gated by default): navigating to a new site,
-clicking a form submit / mutating control (`send`, `delete`, `pay`, `kirim`,
-`hapus`, …), typing into a credential field, pressing Enter to submit, or
-uploading a file. The classifier judges the *real element on the page*, not the
-model's description of it. See [`handoff/approval.py`](handoff/approval.py).
+What counts as **sensitive** (gated by default): navigating — or opening a tab —
+to a new site, clicking a form submit / mutating control (`send`, `delete`,
+`pay`, `kirim`, `hapus`, …), typing into a credential field, pressing Enter to
+submit, changing a dropdown inside a form, or uploading a file. Read-only
+actions (`extract_content`, `scroll`, `scroll_to_text`, `list_tabs`,
+`switch_tab`, …) run without asking. The classifier judges the *real element on
+the page*, not the model's description of it. See
+[`handoff/approval.py`](handoff/approval.py).
 
 ---
+
+## Extending handoff with your own actions
+
+Actions live in a registry, so teaching handoff a new trick is one decorated
+function — the tool schema and dispatch are generated for you, and the approval
+gate automatically covers it (an unrecognised or mutating action fails *safe*):
+
+```python
+from handoff.actions import registry
+from handoff.registry import ActionResult
+
+@registry.action(
+    "download_invoice",
+    "Download the invoice currently on screen.",
+    params={"index": {"type": "integer"}}, required=["index"],
+)
+def _download_invoice(ctx, args):
+    msg = ctx.browser.click_index(args["index"])
+    return ActionResult(extracted_content=msg)
+```
+
+That is the same `@tool`-style registration browser-use popularised — handoff just
+keeps the human in the loop around it.
 
 ## Security model
 

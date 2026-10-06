@@ -42,6 +42,15 @@ _SECRET_FIELD_RE = re.compile(
     re.I,
 )
 
+# Actions that only read or move focus — never gated.
+_SAFE_ACTIONS = (
+    "read_page", "scroll", "scroll_to_text", "wait", "go_back", "done",
+    "ask_human", "extract_content", "switch_tab", "list_tabs",
+)
+
+# Actions that load a URL — classified by origin.
+_NAV_ACTIONS = ("navigate", "open_tab")
+
 
 @dataclass
 class Decision:
@@ -69,11 +78,11 @@ def classify(action: dict, *, current_url: str | None, settings: Settings) -> De
     args = action.get("input", {}) or {}
     element = args.get("element") or {}
 
-    # Reads and waits are always safe.
-    if name in ("read_page", "scroll", "wait", "go_back", "done", "ask_human"):
+    # Reads, waits and focus changes are always safe.
+    if name in _SAFE_ACTIONS:
         return Decision(False, "read-only/navigational")
 
-    if name == "navigate":
+    if name in _NAV_ACTIONS:
         target = _origin(args.get("url"))
         here = _origin(current_url)
         if target and target in settings.allowed_origins:
@@ -91,6 +100,11 @@ def classify(action: dict, *, current_url: str | None, settings: Settings) -> De
         if args.get("submit"):
             return Decision(True, "submits a form (Enter) after typing")
         return Decision(False, "types into a normal text field")
+
+    if name == "select_option":
+        if element.get("in_form"):
+            return Decision(True, "changes a dropdown inside a form")
+        return Decision(False, "selects a dropdown option")
 
     if name == "press":
         if str(args.get("key", "")).lower() in ("enter", "return"):

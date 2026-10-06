@@ -47,7 +47,9 @@ They log in, press Enter, and the session is saved to a local, git-ignored
 
 **You (Claude Code) may run `--dry-run` directly** to preview the plan and do
 read-only exploration — it never mutates and auto-denies sensitive actions, so it
-needs no human at the keyboard:
+needs no human at the keyboard. Read-only exploration includes `extract_content`
+(pull specific data off a page), `scroll_to_text`, and tab inspection
+(`list_tabs` / `switch_tab`):
 
 ```bash
 handoff run "find the latest invoice and report its total" \

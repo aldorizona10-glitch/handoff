@@ -4,16 +4,26 @@ This is intentionally a hand-written loop rather than the SDK tool-runner,
 because the whole point of handoff is the human brake *between* the model
 choosing an action and that action running. That gate lives right here, in the
 middle of the loop, where it is easy to read and audit.
+
+Like browser-use, the model may return several actions in one step; we run them
+in order but stop the moment one changes the page, so the next action is always
+chosen against a fresh element list rather than a stale index.
 """
 
 from __future__ import annotations
 
 from . import prompts
-from .actions import attach_element, execute, tool_schemas
+from .actions import attach_element, registry
 from .approval import gate
 from .browser import Browser
-from .config import ApprovalMode, Settings
+from .config import Settings
 from .llm import LLM
+from .registry import ActionContext, ActionResult
+
+# Actions that may change the page/tab, after which queued actions are stale and
+# we must re-observe before continuing (browser-use does the same).
+_CHANGES_PAGE = {"navigate", "click", "go_back", "open_tab", "switch_tab",
+                 "select_option", "press"}
 
 
 def _user_content(state_text: str, screenshot_b64, settings: Settings,
@@ -41,9 +51,11 @@ def _capture(browser: Browser):
 def run(settings: Settings, *, out=print, ask=input) -> dict:
     settings.validate()
     llm = LLM(settings)
-    tools = tool_schemas()
+    tools = registry.tool_schemas()
 
     with Browser(settings) as browser:
+        ctx = ActionContext(browser=browser, ask=ask, llm=llm, settings=settings)
+
         if settings.start_url:
             out(f"→ opening {settings.start_url}")
             browser.navigate(settings.start_url)
@@ -75,34 +87,48 @@ def run(settings: Settings, *, out=print, ask=input) -> dict:
 
             tool_results = []
             finished = False
+            page_changed = False
             for b in tool_uses:
+                # A previous action this step changed the page; the actions the
+                # model queued after it were chosen against a now-stale element
+                # list. Skip them and re-observe (browser-use does the same).
+                if page_changed:
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": b.id,
+                        "content": "skipped: page changed earlier this step; "
+                                   "re-observing before continuing",
+                    })
+                    continue
+
                 action = attach_element(
                     {"name": b.name, "input": b.input, "id": b.id}, elements)
-
-                if action["name"] == "done":
-                    summary = (b.input or {}).get("summary", "")
-                    success = bool((b.input or {}).get("success"))
-                    out(f"  ✔ done: {summary} (success={success})")
-                    finished = True
-                    break
 
                 allowed, reason = gate(action, current_url=browser.url,
                                        settings=settings, prompter=ask, out=out)
                 if allowed:
-                    try:
-                        result = execute(action, browser, ask=ask)
-                    except Exception as exc:  # feed errors back so the model adapts
-                        result = f"error while executing: {exc}"
-                    out(f"  → {result}")
+                    result = registry.execute(action["name"], action["input"], ctx)
                 else:
-                    result = f"DENIED: {reason}"
-                    out(f"  ⛔ {result}")
+                    result = ActionResult(error=f"DENIED: {reason}")
+
+                text_out = result.to_text()
+                out(f"  ⛔ {text_out}" if result.error and result.error.startswith("DENIED")
+                    else f"  → {text_out}")
 
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": b.id,
-                    "content": result,
+                    "content": text_out,
                 })
+
+                if result.is_done:
+                    summary, success = result.extracted_content or "", result.success
+                    out(f"  ✔ done: {summary} (success={success})")
+                    finished = True
+                    break
+
+                if action["name"] in _CHANGES_PAGE and not result.error:
+                    page_changed = True
 
             if finished:
                 break
