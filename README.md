@@ -40,19 +40,25 @@ with three deliberate choices:
 
 ## How it works
 
-```mermaid
-flowchart LR
-    A[You: handoff login] -->|log in by hand| B[(Local profile<br/>cookies, git-ignored)]
-    C[You: handoff run &quot;task&quot;] --> D{Agent loop}
-    B --> D
-    D -->|screenshot + DOM| E[Claude picks an action]
-    E --> F{Sensitive?}
-    F -- no --> G[Run it]
-    F -- yes --> H[Ask you: y/N]
-    H -- y --> G
-    H -- N --> I[Denied → agent adapts]
-    G --> D
-    D -->|done| J[Honest summary]
+```text
+  STEP 1 ·  handoff login
+            You log into your sites BY HAND, once.
+            Cookies are saved to .handoff-profile/ — a local, git-ignored folder.
+            handoff never sees, stores, or types your password.
+
+  STEP 2 ·  handoff run "task"
+            The agent drives your already-authenticated browser, looping:
+
+               observe  ->  screenshot + an indexed list of interactive elements
+               think    ->  Claude picks the next action
+               GATE     ->  is it sensitive? (submit / send / pay / delete /
+                            cross-site navigation)
+                              - no   ->  run it
+                              - yes  ->  ask you:   y -> run it
+                                                    N -> denied, the agent adapts
+               repeat   ->  until the task is done
+
+  STEP 3 ·  An honest summary of what was -- and wasn't -- accomplished.
 ```
 
 Each step the agent sees the current URL, the visible text, a screenshot, and an
