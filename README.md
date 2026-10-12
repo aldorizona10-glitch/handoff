@@ -236,3 +236,4 @@ to keep a person accountable for every outbound action; please keep it that way.
 ## License
 
 MIT © 2026 Aldo Rizona. See [LICENSE](LICENSE).
+
